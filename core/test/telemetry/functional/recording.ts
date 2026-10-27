@@ -109,8 +109,8 @@ let sharedHarness: TelemetryHarness | undefined;
 /**
  * Initializes a single process-wide set of in-memory OpenTelemetry providers.
  *
- * `core/src/telemetry/tracing.ts` calls `trace.getTracer(...)` at module load
- * time, and `@opentelemetry/api`'s `ProxyTracer` caches its delegate `Tracer`
+ * `core/src/telemetry/api/internal/trace/tracer.ts` calls `trace.getTracer(...)`
+ * at module load time, and `@opentelemetry/api`'s `ProxyTracer` caches its delegate `Tracer`
  * on first span creation. Reusing a single `BasicTracerProvider` and resetting
  * its `InMemorySpanExporter` between test cases ensures every span is captured.
  */
