@@ -4,13 +4,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {context, type Context, trace} from '@opentelemetry/api';
+import {
+  context,
+  type Context,
+  type Span,
+  SpanStatusCode,
+  trace,
+  type Tracer,
+} from '@opentelemetry/api';
 
 import {version} from '../../../../version.js';
-import {GEN_AI_SYSTEM_VALUE} from '../common/attributes.js';
+import {GEN_AI_SYSTEM_VALUE, SCHEMA_URL} from '../common/attributes.js';
+import {resolveErrorType} from '../common/error.js';
 
-/** Shared OpenTelemetry tracer for ADK spans. */
-export const tracer = trace.getTracer(GEN_AI_SYSTEM_VALUE, version);
+/**
+ * Returns the ADK tracer from the global `TracerProvider`.
+ *
+ * Resolved on every call rather than once at import, like the logger, so the
+ * tracer carries the schema URL whichever provider the application registers
+ * and whenever it registers it.
+ */
+export function getTracer(): Tracer {
+  return trace
+    .getTracerProvider()
+    .getTracer(GEN_AI_SYSTEM_VALUE, version, {schemaUrl: SCHEMA_URL});
+}
 
 /**
  * Binds an async generator to OpenTelemetry context for trace propagation.
@@ -34,4 +52,26 @@ export function bindOtelContextToAsyncGenerator<T>(
       );
     },
   };
+}
+
+/**
+ * Records a failure on a span: the exception and an ERROR status.
+ *
+ * The status message is the error type rather than the error message, which
+ * can carry user data that the content capture setting does not gate. Only an
+ * `Error` instance is recorded as an exception; any other thrown value is
+ * recorded by its type alone.
+ */
+export function setSpanError(span: Span, error: unknown): void {
+  const errorType = resolveErrorType(error);
+  let exception: Error | string;
+  try {
+    exception = error instanceof Error ? error : errorType;
+  } catch {
+    // A hostile thrown value (for example, a Proxy with a throwing prototype
+    // trap) must not replace the original error with a telemetry error.
+    exception = errorType;
+  }
+  span.recordException(exception);
+  span.setStatus({code: SpanStatusCode.ERROR, message: errorType});
 }
